@@ -1,0 +1,80 @@
+import React from 'react';
+import { Handle, Position } from 'reactflow';
+import { Target, TrendingUp } from 'lucide-react';
+import { motion } from 'framer-motion';
+import StatusIndicator from '../StatusIndicator';
+
+const OptimizationNode = ({ data, selected }) => {
+  const status = data?.status || 'PASS';
+
+  const getBorderColor = () => {
+    if (status === 'FAIL') return 'border-accent-red';
+    if (status === 'WARN') return 'border-accent-amber';
+    return 'border-accent-green';
+  };
+
+  return (
+    <motion.div
+      initial={{ scale: 0.9, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className={`bg-dark-surface border-2 ${getBorderColor()} rounded-lg p-4 min-w-[220px] shadow-lg ${
+        selected ? 'ring-2 ring-accent-green ring-offset-2 ring-offset-dark-bg' : ''
+      }`}
+      tabIndex={0}
+      role="button"
+      aria-label={`Optimization node, status: ${status}`}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-3 h-3 bg-gray-500"
+        aria-label="Connection point from contract"
+      />
+      
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center space-x-2">
+          <Target className="w-5 h-5 text-gray-400" aria-hidden="true" />
+          <h3 className="font-semibold text-white">Optimization</h3>
+        </div>
+        <StatusIndicator status={status} size="sm" />
+      </div>
+
+      <div className="space-y-3 text-sm">
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block flex items-center space-x-1">
+            <TrendingUp className="w-3 h-3" aria-hidden="true" />
+            <span>Contract Goal</span>
+          </label>
+          <div className="text-white bg-dark-bg px-2 py-1 rounded font-medium">
+            {data?.contractGoal || 'N/A'}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Setup Goal</label>
+          <div className={`bg-dark-bg px-2 py-1 rounded font-medium ${
+            status === 'FAIL' ? 'text-accent-red' : 'text-white'
+          }`}>
+            {data?.setupGoal || 'N/A'}
+          </div>
+        </div>
+
+        {status === 'FAIL' && (
+          <div className="px-2 py-1 bg-red-900/30 border border-accent-red rounded text-xs text-red-200">
+            ⚠️ Goal mismatch: Setup optimized for different objective
+          </div>
+        )}
+      </div>
+
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-3 h-3 bg-gray-500"
+        aria-label="Connection point"
+      />
+    </motion.div>
+  );
+};
+
+export default OptimizationNode;
+

@@ -12,7 +12,7 @@ const ContractNode = ({ data }) => {
     >
       <div className="flex items-center space-x-2 mb-3">
         <FileText className="w-5 h-5 text-accent-green" aria-hidden="true" />
-        <h3 className="font-semibold text-white">Sales Contract</h3>
+        <h3 className="font-semibold text-white">Master Contract</h3>
       </div>
       <div className="text-xs text-gray-400 mb-2">Source of Truth</div>
       <div className="space-y-1 text-sm">

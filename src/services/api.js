@@ -3,7 +3,7 @@
  * Handles all API communication with proper authentication
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 /**
@@ -94,5 +94,47 @@ export async function updateField(fieldType, value) {
     method: 'PUT',
     body: JSON.stringify({ value }),
   });
+}
+
+/**
+ * Get audience data
+ */
+export async function getAudienceData() {
+  return apiRequest('/campaign/audience');
+}
+
+/**
+ * Get optimization data
+ */
+export async function getOptimizationData() {
+  return apiRequest('/campaign/optimization');
+}
+
+/**
+ * Get creative data
+ */
+export async function getCreativeData() {
+  return apiRequest('/campaign/creative');
+}
+
+/**
+ * Get copy data
+ */
+export async function getCopyData() {
+  return apiRequest('/campaign/copy');
+}
+
+/**
+ * Get temporal data
+ */
+export async function getTemporalData() {
+  return apiRequest('/campaign/temporal');
+}
+
+/**
+ * Get strategic gaps
+ */
+export async function getStrategicGaps() {
+  return apiRequest('/audit/strategic-gaps');
 }
 

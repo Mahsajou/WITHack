@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from './components/Header';
 import AuditSidebar from './components/AuditSidebar';
+import StrategyMirrorSidebar from './components/StrategyMirrorSidebar';
 import NodeWorkspace from './components/NodeWorkspace';
 import PushToLiveButton from './components/PushToLiveButton';
 import {
@@ -18,11 +19,93 @@ function App() {
   const [error, setError] = useState(null);
   const [complianceScore, setComplianceScore] = useState(0);
   const [flags, setFlags] = useState([]);
-  const [contractData, setContractData] = useState({
-    fields: {},
-  });
+  const [strategicGaps, setStrategicGaps] = useState([]);
+  const [isFixingAll, setIsFixingAll] = useState(false);
+  const [fixAllTrigger, setFixAllTrigger] = useState(0);
+  
+  // Contract and Field data
+  const [contractData, setContractData] = useState({ fields: {} });
   const [fieldData, setFieldData] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState({});
+  
+  // New node data
+  const [audienceData, setAudienceData] = useState(null);
+  const [optimizationData, setOptimizationData] = useState(null);
+  const [creativeData, setCreativeData] = useState(null);
+  const [copyData, setCopyData] = useState(null);
+  const [temporalData, setTemporalData] = useState(null);
+
+  // Initialize with mock data for demonstration
+  useEffect(() => {
+    // Mock audience data with failure scenario
+    setAudienceData({
+      status: 'FAIL',
+      hasSeverance: true, // Age range broader than contract
+      contractAge: '25-35',
+      setupAge: '18-24',
+      interests: ['Technology', 'Gaming', 'Entertainment'],
+      geos: ['US', 'CA', 'UK'],
+    });
+
+    // Mock optimization data
+    setOptimizationData({
+      status: 'FAIL',
+      contractGoal: 'ROAS 4.0',
+      setupGoal: 'CPC (Traffic)',
+    });
+
+    // Mock creative data
+    setCreativeData({
+      status: 'PASS',
+      type: 'image',
+      thumbnail: 'https://via.placeholder.com/200x150/00d4aa/ffffff?text=Creative',
+      talentRights: 'Active',
+      metadata: {
+        format: 'JPG',
+        size: '2.4 MB',
+        dimensions: '1920x1080',
+      },
+    });
+
+    // Mock copy data
+    setCopyData({
+      status: 'FAIL',
+      headline: 'Get 50% Off Today Only!',
+      body: 'Limited time offer. Act now before it\'s too late. Terms and conditions apply.',
+      violations: ['Missing disclaimer', 'Unsubstantiated claim'],
+    });
+
+    // Mock temporal data
+    setTemporalData({
+      status: 'WARN',
+      contractStart: '2024-01-01',
+      contractEnd: '2024-12-31',
+      setupStart: '2024-01-15',
+      setupEnd: '2025-01-05',
+    });
+
+    // Calculate strategic gaps
+    const gaps = [];
+    if (audienceData?.hasSeverance) {
+      gaps.push({
+        message: 'Target audience age range (18-24) is broader than contract specification (25-35). Severance required.',
+        remediation: 'Adjust age targeting to match contract range',
+      });
+    }
+    if (optimizationData?.status === 'FAIL') {
+      gaps.push({
+        message: 'The setup is optimized for Traffic (CPC), but the contract guarantees Sales (ROAS 4.0). Remediation required.',
+        remediation: 'Change optimization goal from CPC to ROAS target',
+      });
+    }
+    if (copyData?.violations?.length > 0) {
+      gaps.push({
+        message: 'Copy contains compliance violations that must be addressed.',
+        remediation: 'Review and update copy to meet compliance standards',
+      });
+    }
+    setStrategicGaps(gaps);
+  }, []);
 
   // Fetch initial data from backend
   useEffect(() => {
@@ -53,7 +136,7 @@ function App() {
       } catch (err) {
         console.error('Failed to fetch data:', err);
         setError(err.message || 'Failed to load data from backend');
-        // Fallback to mock data if API fails
+        // Fallback to mock data
         setContractData({
           fields: {
             Budget: '$50,000',
@@ -142,13 +225,28 @@ function App() {
       const warnCount = flags.filter((f) => f.status === 'WARN').length;
       const passCount = flags.filter((f) => f.status === 'PASS').length;
 
-      // Score calculation: PASS = 100%, WARN = 50%, FAIL = 0%
       const score = Math.round(
         ((passCount * 100 + warnCount * 50) / totalFlags) || 0
       );
       setComplianceScore(score);
     }
   }, [flags, complianceScore]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Cmd+R or Ctrl+R for remediation
+      if ((event.metaKey || event.ctrlKey) && event.key === 'r') {
+        event.preventDefault();
+        if (strategicGaps.length > 0 && !isFixingAll) {
+          handleFixAll();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [strategicGaps, isFixingAll]);
 
   // Announce compliance score changes to screen readers
   useEffect(() => {
@@ -160,10 +258,8 @@ function App() {
 
   const handleRemediate = useCallback(async (flag) => {
     try {
-      // Call backend API to remediate
       const result = await remediateField(flag.id, flag.field);
 
-      // Find the corresponding field and update it
       const fieldIndex = fieldData.findIndex(
         (f) => f.fieldType === flag.field
       );
@@ -172,30 +268,24 @@ function App() {
         const updatedFieldData = [...fieldData];
         const field = updatedFieldData[fieldIndex];
 
-        // Morph animation: update field to match expected value
         updatedFieldData[fieldIndex] = {
           ...field,
           value: result.value || field.expected || field.value,
           status: 'PASS',
-          remediatedAt: Date.now(), // Track when remediation happened
+          remediatedAt: Date.now(),
         };
 
         setFieldData(updatedFieldData);
-
-        // Update connection status
         setConnectionStatus((prev) => ({
           ...prev,
           [flag.field]: 'PASS',
         }));
-
-        // Update flag status
         setFlags((prevFlags) =>
           prevFlags.map((f) =>
             f.id === flag.id ? { ...f, status: 'PASS' } : f
           )
         );
 
-        // Refresh compliance score
         try {
           const scoreData = await getComplianceScore();
           setComplianceScore(scoreData.score || scoreData);
@@ -203,7 +293,6 @@ function App() {
           console.error('Failed to refresh compliance score:', err);
         }
 
-        // Announce remediation to screen readers
         const announcement = document.getElementById('remediation-announcement');
         if (announcement) {
           announcement.textContent = `${flag.field} field has been remediated and now matches contract specifications`;
@@ -215,12 +304,81 @@ function App() {
     }
   }, [fieldData]);
 
+  const handleFixAll = useCallback(async () => {
+    setIsFixingAll(true);
+    setFixAllTrigger(Date.now()); // Trigger animation
+
+    try {
+      // Remediate all failing flags
+      const failingFlags = flags.filter((f) => f.status === 'FAIL');
+      const remediationPromises = failingFlags.map((flag) =>
+        remediateField(flag.id, flag.field).catch((err) => {
+          console.error(`Failed to remediate ${flag.field}:`, err);
+          return null;
+        })
+      );
+
+      await Promise.all(remediationPromises);
+
+      // Fix audience severance
+      if (audienceData?.hasSeverance) {
+        setAudienceData((prev) => ({
+          ...prev,
+          status: 'PASS',
+          hasSeverance: false,
+          setupAge: prev.contractAge,
+        }));
+      }
+
+      // Fix optimization
+      if (optimizationData?.status === 'FAIL') {
+        setOptimizationData((prev) => ({
+          ...prev,
+          status: 'PASS',
+          setupGoal: prev.contractGoal,
+        }));
+      }
+
+      // Fix copy violations
+      if (copyData?.violations?.length > 0) {
+        setCopyData((prev) => ({
+          ...prev,
+          status: 'PASS',
+          violations: [],
+        }));
+      }
+
+      // Update strategic gaps
+      setStrategicGaps([]);
+
+      // Refresh compliance score
+      try {
+        const scoreData = await getComplianceScore();
+        setComplianceScore(scoreData.score || scoreData);
+      } catch (err) {
+        console.error('Failed to refresh compliance score:', err);
+      }
+
+      // Announce to screen readers
+      const announcement = document.getElementById('remediation-announcement');
+      if (announcement) {
+        announcement.textContent = 'All issues have been remediated';
+      }
+    } catch (err) {
+      console.error('Fix All failed:', err);
+      alert(`Failed to fix all issues: ${err.message}`);
+    } finally {
+      setTimeout(() => {
+        setIsFixingAll(false);
+      }, 2000);
+    }
+  }, [flags, audienceData, optimizationData, copyData]);
+
   const handlePushToLive = useCallback(async () => {
     if (complianceScore === 100) {
       try {
         const result = await pushToLive();
         alert(result.message || 'Campaign pushed to live successfully!');
-        // Optionally refresh data after push
         window.location.reload();
       } catch (err) {
         console.error('Push to live failed:', err);
@@ -230,7 +388,6 @@ function App() {
   }, [complianceScore]);
 
   const handleNodeUpdate = useCallback((node) => {
-    // Handle node interaction if needed
     console.log('Node updated:', node);
   }, []);
 
@@ -254,7 +411,7 @@ function App() {
           <p className="text-gray-400 mb-4">{error}</p>
           <p className="text-sm text-gray-500">
             Using fallback data. Make sure your backend is running at{' '}
-            {import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}
+            {import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}
           </p>
         </div>
       </div>
@@ -263,7 +420,7 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-dark-bg overflow-hidden">
-      {/* ARIA live regions for screen reader announcements */}
+      {/* ARIA live regions */}
       <div
         id="compliance-announcement"
         className="sr-only"
@@ -287,11 +444,23 @@ function App() {
             <NodeWorkspace
               contractData={contractData}
               fieldData={fieldData}
+              audienceData={audienceData}
+              optimizationData={optimizationData}
+              creativeData={creativeData}
+              copyData={copyData}
+              temporalData={temporalData}
               onNodeUpdate={handleNodeUpdate}
               connectionStatus={connectionStatus}
+              onFixAllTrigger={fixAllTrigger}
             />
           </AnimatePresence>
         </div>
+
+        <StrategyMirrorSidebar
+          strategicGaps={strategicGaps}
+          onFixAll={handleFixAll}
+          isFixing={isFixingAll}
+        />
       </div>
 
       <PushToLiveButton
@@ -303,4 +472,3 @@ function App() {
 }
 
 export default App;
-
