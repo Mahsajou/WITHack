@@ -12,6 +12,12 @@ import {
   getComplianceScore,
   remediateField,
   pushToLive,
+  getAudienceData,
+  getOptimizationData,
+  getCreativeData,
+  getCopyData,
+  getTemporalData,
+  getStrategicGaps,
 } from './services/api';
 
 function App() {
@@ -35,76 +41,79 @@ function App() {
   const [copyData, setCopyData] = useState(null);
   const [temporalData, setTemporalData] = useState(null);
 
-  // Initialize with mock data for demonstration
+  // Fetch node data from backend
   useEffect(() => {
-    // Mock audience data with failure scenario
-    setAudienceData({
-      status: 'FAIL',
-      hasSeverance: true, // Age range broader than contract
-      contractAge: '25-35',
-      setupAge: '18-24',
-      interests: ['Technology', 'Gaming', 'Entertainment'],
-      geos: ['US', 'CA', 'UK'],
-    });
+    const fetchNodeData = async () => {
+      try {
+        const [audience, optimization, creative, copy, temporal, gaps] = await Promise.all([
+          getAudienceData().catch(() => null),
+          getOptimizationData().catch(() => null),
+          getCreativeData().catch(() => null),
+          getCopyData().catch(() => null),
+          getTemporalData().catch(() => null),
+          getStrategicGaps().catch(() => []),
+        ]);
 
-    // Mock optimization data
-    setOptimizationData({
-      status: 'FAIL',
-      contractGoal: 'ROAS 4.0',
-      setupGoal: 'CPC (Traffic)',
-    });
+        if (audience) setAudienceData(audience);
+        if (optimization) setOptimizationData(optimization);
+        if (creative) setCreativeData(creative);
+        if (copy) setCopyData(copy);
+        if (temporal) setTemporalData(temporal);
+        if (gaps) setStrategicGaps(gaps);
+      } catch (err) {
+        console.error('Failed to fetch node data:', err);
+        // Fallback to mock data
+        setAudienceData({
+          status: 'FAIL',
+          hasSeverance: true,
+          contractAge: '25-35',
+          setupAge: '18-24',
+          interests: ['Technology', 'Gaming', 'Entertainment'],
+          geos: ['US', 'CA', 'UK'],
+        });
+        setOptimizationData({
+          status: 'FAIL',
+          contractGoal: 'ROAS 4.0',
+          setupGoal: 'CPC (Traffic)',
+        });
+        setCreativeData({
+          status: 'PASS',
+          type: 'image',
+          thumbnail: 'https://via.placeholder.com/200x150/00d4aa/ffffff?text=Creative',
+          talentRights: 'Active',
+          metadata: {
+            format: 'JPG',
+            size: '2.4 MB',
+            dimensions: '1920x1080',
+          },
+        });
+        setCopyData({
+          status: 'FAIL',
+          headline: 'Get 50% Off Today Only!',
+          body: 'Limited time offer. Act now before it\'s too late. Terms and conditions apply.',
+          violations: ['Missing disclaimer', 'Unsubstantiated claim'],
+        });
+        setTemporalData({
+          status: 'WARN',
+          contractStart: '2024-01-01',
+          contractEnd: '2024-12-31',
+          setupStart: '2024-01-15',
+          setupEnd: '2025-01-05',
+        });
+        setStrategicGaps([
+          {
+            message: 'Target audience age range (18-24) is broader than contract specification (25-35). Severance required.',
+            remediation: 'Adjust age targeting to match contract range',
+          },
+          {
+            message: 'The setup is optimized for Traffic (CPC), but the contract guarantees Sales (ROAS 4.0). Remediation required.',
+            remediation: 'Change optimization goal from CPC to ROAS target',
+          },
+        ]);
+      }
+    };
 
-    // Mock creative data
-    setCreativeData({
-      status: 'PASS',
-      type: 'image',
-      thumbnail: 'https://via.placeholder.com/200x150/00d4aa/ffffff?text=Creative',
-      talentRights: 'Active',
-      metadata: {
-        format: 'JPG',
-        size: '2.4 MB',
-        dimensions: '1920x1080',
-      },
-    });
-
-    // Mock copy data
-    setCopyData({
-      status: 'FAIL',
-      headline: 'Get 50% Off Today Only!',
-      body: 'Limited time offer. Act now before it\'s too late. Terms and conditions apply.',
-      violations: ['Missing disclaimer', 'Unsubstantiated claim'],
-    });
-
-    // Mock temporal data
-    setTemporalData({
-      status: 'WARN',
-      contractStart: '2024-01-01',
-      contractEnd: '2024-12-31',
-      setupStart: '2024-01-15',
-      setupEnd: '2025-01-05',
-    });
-
-    // Calculate strategic gaps
-    const gaps = [];
-    if (audienceData?.hasSeverance) {
-      gaps.push({
-        message: 'Target audience age range (18-24) is broader than contract specification (25-35). Severance required.',
-        remediation: 'Adjust age targeting to match contract range',
-      });
-    }
-    if (optimizationData?.status === 'FAIL') {
-      gaps.push({
-        message: 'The setup is optimized for Traffic (CPC), but the contract guarantees Sales (ROAS 4.0). Remediation required.',
-        remediation: 'Change optimization goal from CPC to ROAS target',
-      });
-    }
-    if (copyData?.violations?.length > 0) {
-      gaps.push({
-        message: 'Copy contains compliance violations that must be addressed.',
-        remediation: 'Review and update copy to meet compliance standards',
-      });
-    }
-    setStrategicGaps(gaps);
+    fetchNodeData();
   }, []);
 
   // Fetch initial data from backend

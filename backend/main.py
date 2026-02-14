@@ -12,6 +12,17 @@ load_dotenv()
 
 app = FastAPI(title="SetSync AI - Autonomous Audit Layer")
 
+# CORS middleware for frontend
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:4173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # --- Configuration ---
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 MINIMAX_API_URL = os.getenv("MINIMAX_API_URL")
@@ -161,6 +172,203 @@ async def run_semantic_audit(campaign_genres: List[str], forbidden_genres: List[
                 ))
                 
     return issues
+
+# --- Frontend API Endpoints ---
+
+@app.get("/api/contract")
+async def get_contract():
+    """Get the default contract data for the frontend."""
+    contract_id = "CNT-9988-LVMH"
+    if contract_id not in mock_db["contracts"]:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    
+    contract = mock_db["contracts"][contract_id]
+    guardrails = contract["guardrails"]
+    
+    # Format for frontend
+    return {
+        "fields": {
+            "Budget": f"${guardrails['total_budget_limit']:,.0f}",
+            "Genres": ", ".join(guardrails.get("allowed_genres", ["Action", "Drama"])),
+            "Geos": ", ".join(guardrails["targeting_logic"].get("geo_targeting", ["US", "CA", "UK"])),
+            "Age Range": f"{guardrails['targeting_logic'].get('audience_age_min', 25)}-{guardrails['targeting_logic'].get('audience_age_max', 35)}",
+            "Start Date": guardrails["flight_dates"]["start"],
+            "End Date": guardrails["flight_dates"]["end"],
+        },
+        "contract_id": contract_id,
+        "client_name": contract["client_name"]
+    }
+
+@app.get("/api/campaign/fields")
+async def get_campaign_fields():
+    """Get campaign field data."""
+    # Return mock campaign fields
+    return [
+        {
+            "fieldType": "Budget",
+            "value": "$55,000",
+            "expected": "$100,000",
+            "status": "FAIL",
+            "remediatedAt": None,
+        },
+        {
+            "fieldType": "Genres",
+            "value": "Action, Drama, Comedy",
+            "expected": "Action, Drama",
+            "status": "WARN",
+            "remediatedAt": None,
+        },
+        {
+            "fieldType": "Geos",
+            "value": "US, CA, UK",
+            "expected": "US, CA, UK",
+            "status": "PASS",
+            "remediatedAt": None,
+        },
+    ]
+
+@app.get("/api/audit/flags")
+async def get_audit_flags():
+    """Get audit flags for the frontend."""
+    # Get the latest report if available
+    if not mock_db["reports"]:
+        return []
+    
+    latest_report = list(mock_db["reports"].values())[-1]
+    
+    flags = []
+    for idx, issue in enumerate(latest_report.issues):
+        flags.append({
+            "id": str(idx + 1),
+            "status": issue.status,
+            "message": issue.message,
+            "field": issue.field,
+            "suggested_fix": issue.suggested_fix,
+            "severity": issue.severity,
+        })
+    
+    return flags
+
+@app.get("/api/audit/compliance-score")
+async def get_compliance_score():
+    """Get compliance score."""
+    if not mock_db["reports"]:
+        return {"score": 0}
+    
+    latest_report = list(mock_db["reports"].values())[-1]
+    return {"score": latest_report.logic_score}
+
+@app.post("/api/audit/remediate/{field_id}")
+async def remediate_field_endpoint(field_id: str, body: dict):
+    """Remediate a field issue."""
+    field_type = body.get("fieldType", "")
+    
+    # Update the campaign field
+    if mock_db["campaigns"]:
+        campaign = list(mock_db["campaigns"].values())[0]
+        # Logic to fix the field based on contract
+        contract = mock_db["contracts"]["CNT-9988-LVMH"]
+        
+        return {
+            "status": "success",
+            "field": field_type,
+            "value": "fixed",  # This would be the corrected value
+        }
+    
+    return {"status": "success", "field": field_type}
+
+@app.post("/api/campaign/push-to-live")
+async def push_to_live_endpoint():
+    """Push campaign to live."""
+    if not mock_db["campaigns"]:
+        raise HTTPException(status_code=400, detail="No campaign to push")
+    
+    campaign_name = list(mock_db["campaigns"].keys())[0]
+    return await publish_live(campaign_name)
+
+@app.get("/api/campaign/audience")
+async def get_audience_data():
+    """Get audience data for Audience Node."""
+    contract = mock_db["contracts"]["CNT-9988-LVMH"]
+    guardrails = contract["guardrails"]
+    
+    return {
+        "status": "FAIL",
+        "hasSeverance": True,
+        "contractAge": f"{guardrails['targeting_logic'].get('audience_age_min', 25)}-{guardrails['targeting_logic'].get('audience_age_max', 35)}",
+        "setupAge": "18-24",
+        "interests": ["Technology", "Gaming", "Entertainment"],
+        "geos": guardrails["targeting_logic"].get("geo_targeting", ["US", "CA", "UK"]),
+    }
+
+@app.get("/api/campaign/optimization")
+async def get_optimization_data():
+    """Get optimization data for Optimization Node."""
+    return {
+        "status": "FAIL",
+        "contractGoal": "ROAS 4.0",
+        "setupGoal": "CPC (Traffic)",
+    }
+
+@app.get("/api/campaign/creative")
+async def get_creative_data():
+    """Get creative data for Creative Node."""
+    return {
+        "status": "PASS",
+        "type": "image",
+        "thumbnail": "https://via.placeholder.com/200x150/00d4aa/ffffff?text=Creative",
+        "talentRights": "Active",
+        "metadata": {
+            "format": "JPG",
+            "size": "2.4 MB",
+            "dimensions": "1920x1080",
+        },
+    }
+
+@app.get("/api/campaign/copy")
+async def get_copy_data():
+    """Get copy data for Copy Node."""
+    return {
+        "status": "FAIL",
+        "headline": "Get 50% Off Today Only!",
+        "body": "Limited time offer. Act now before it's too late. Terms and conditions apply.",
+        "violations": ["Missing disclaimer", "Unsubstantiated claim"],
+    }
+
+@app.get("/api/campaign/temporal")
+async def get_temporal_data():
+    """Get temporal data for Temporal Node."""
+    contract = mock_db["contracts"]["CNT-9988-LVMH"]
+    guardrails = contract["guardrails"]
+    
+    return {
+        "status": "WARN",
+        "contractStart": guardrails["flight_dates"]["start"],
+        "contractEnd": guardrails["flight_dates"]["end"],
+        "setupStart": "2026-01-15",
+        "setupEnd": "2026-04-05",
+    }
+
+@app.get("/api/audit/strategic-gaps")
+async def get_strategic_gaps():
+    """Get strategic gaps for Strategy Mirror."""
+    gaps = []
+    
+    # Check audience severance
+    gaps.append({
+        "message": "Target audience age range (18-24) is broader than contract specification (25-35). Severance required.",
+        "remediation": "Adjust age targeting to match contract range",
+    })
+    
+    # Check optimization mismatch
+    gaps.append({
+        "message": "The setup is optimized for Traffic (CPC), but the contract guarantees Sales (ROAS 4.0). Remediation required.",
+        "remediation": "Change optimization goal from CPC to ROAS target",
+    })
+    
+    return gaps
+
+# --- Original Backend Endpoints ---
 
 @app.post("/audit/{contract_id}", response_model=AuditReport)
 async def audit_campaign(contract_id: str, campaign: CampaignModel):
